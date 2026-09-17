@@ -1,0 +1,4 @@
+"0","pca1_4 <- PCA(d4[c(shape_names, ""Origin"")], scale.unit = FALSE,"
+"0","              quali.sup = 4, graph = FALSE)"
+"0","pca2_4 <- PCA(d4[c(five_names, ""Origin"")], scale.unit = TRUE,"
+"0","              quali.sup = 6, graph = FALSE)"

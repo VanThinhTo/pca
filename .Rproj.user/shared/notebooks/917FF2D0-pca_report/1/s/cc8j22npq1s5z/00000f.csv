@@ -1,0 +1,2 @@
+"0","par(mfrow = c(1, 2), mar = c(4, 4, 3, 1))"
+"0","score_plot(pca1_4, cluster_five, cluster_colors, ""Five-variable clusters on PCA1"")"

@@ -1,0 +1,1 @@
+"0","show_table(as.data.frame(table(d1$Origin)), digits = 0)"

@@ -1,0 +1,5 @@
+"0","ks <- 2:8"
+"0","silhouette_mean <- sapply(ks, function(k) {"
+"0","  mean(cluster::silhouette(cutree(tree3, k), dist3)[, ""sil_width""])"
+"0","})"
+"0","data.frame(k = ks, Average_silhouette = silhouette_mean)"

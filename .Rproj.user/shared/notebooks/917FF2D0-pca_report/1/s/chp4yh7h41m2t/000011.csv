@@ -1,0 +1,2 @@
+"0","plot(ks, silhouette_mean, type = ""b"", pch = 16, ylim = c(-1, 1),"
+"0","     xlab = ""k"", ylab = ""Average silhouette"", main = ""Full scale [-1, 1]"")"

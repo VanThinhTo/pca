@@ -1,0 +1,8 @@
+"0","set.seed(22518830)"
+"0","stability <- lapply(c(4, 2, 3), function(k) bootstrap_clusters(x3, k))"
+"0","names(stability) <- c(""4"", ""2"", ""3"")"
+"0","stability_table <- do.call(rbind, lapply(names(stability), function(k) {"
+"0","  data.frame(k = as.integer(k), Cluster = seq_along(stability[[k]]),"
+"0","             Mean_Jaccard = stability[[k]])"
+"0","}))"
+"0","stability_table"

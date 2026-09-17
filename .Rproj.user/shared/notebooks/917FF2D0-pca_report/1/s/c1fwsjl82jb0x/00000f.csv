@@ -1,0 +1,4 @@
+"0","d3 <- load_data()"
+"0","x3 <- d3[shape_names]"
+"0","dist3 <- dist(x3)"
+"0","tree3 <- hclust(dist3, method = ""ward.D2"")"

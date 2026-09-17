@@ -1,0 +1,8 @@
+"0","d1 <- add_rg(d1)"
+"0","five_input <- d1[c(five_names, ""Origin"")]"
+"0","pca_raw <- PCA(five_input, scale.unit = FALSE, quali.sup = 6, graph = FALSE)"
+"0","pca2 <- PCA(five_input, scale.unit = TRUE, quali.sup = 6, graph = FALSE)"
+"0",""
+"0","raw_variance <- sapply(d1[five_names], var)"
+"0","data.frame(Variable = five_names, Variance = raw_variance,"
+"0","           Percent = 100 * raw_variance / sum(raw_variance))"

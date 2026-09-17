@@ -1,0 +1,3 @@
+"0","data.frame("
+"0","  PC = 1:5, Unscaled_percent = pca_raw$eig[, 2],"
+"0","  Scaled_percent = pca2$eig[, 2])"

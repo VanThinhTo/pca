@@ -1,0 +1,3 @@
+"0","par(mfrow = c(1, 2), mar = c(4, 4, 3, 1))"
+"0","plot(ks, silhouette_mean, type = ""b"", pch = 16,"
+"0","     xlab = ""k"", ylab = ""Average silhouette"", main = ""Default scale"")"

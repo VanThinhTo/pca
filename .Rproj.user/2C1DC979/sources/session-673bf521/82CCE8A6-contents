@@ -1,0 +1,740 @@
+---
+output:
+  pdf_document:
+    latex_engine: xelatex
+    number_sections: true
+    fig_caption: true
+    keep_tex: true
+documentclass: article
+fontsize: 10pt
+geometry: margin=0.82in
+header-includes:
+  - \usepackage{booktabs}
+  - \usepackage{float}
+  - \usepackage{xcolor}
+  - \setcounter{tocdepth}{1}
+  - \setlength{\parindent}{0pt}
+  - \setlength{\parskip}{0.25em}
+---
+
+\begin{center}
+\IfFileExists{report_assets/upc_logo.png}{\includegraphics[width=0.20\textwidth]{report_assets/upc_logo.png}\\[0.45em]}{}
+{\LARGE\bfseries PCA Report}\\[0.45em]
+Student name: Van Thinh TO\\
+Student ID: 22518830\\[0.35em]
+\end{center}
+
+\vspace{1em}
+\vspace{1em}
+\tableofcontents
+\newpage
+
+# Set up
+```{r setup, include=TRUE, echo=TRUE, message=FALSE, warning=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE, message = FALSE, warning = FALSE,
+  fig.align = "center", fig.pos = "H",
+  out.width = "72%", dpi = 200, dev = "pdf", comment = "##"
+)
+
+options(digits = 4)
+
+library(FactoMineR)
+library(cluster)
+library(fpc)
+library(pheatmap)
+
+shape_names <- c("rEV21", "rEV32", "rEV31")
+five_names <- c(shape_names, "Num_Atoms", "Rg")
+cluster_colors <- c("#2C7FB8", "#D95F02", "#33A02C", "#8C1D40")
+origin_colors <- c(PROT = "#2C7FB8", RNA = "#8C1D40")
+
+```
+
+# Session 1 — PCA
+
+PCA combines measurements into new axes. PC1 captures the most variation;
+PC2 captures the most remaining variation in a perpendicular direction.
+**Variance** measures spread between pockets. **Scores** are their coordinates
+on these axes. PCA centers the measurements automatically; scaling also divides
+them by their standard deviations (SDs).
+
+## Import and check the data
+
+We inspect column types, missing values, and Origin counts before analysis.
+
+```{r import}
+# Read the file and show a short preview of each column.
+d1 <- read.csv("data_NS.csv", stringsAsFactors = TRUE)
+str(d1, vec.len = 2, strict.width = "cut", width = 75)
+
+# Count missing entries and pockets of each Origin.
+colSums(is.na(d1))
+table(d1$Origin)
+```
+
+**Reading the data:** `PDB_ID` and `Pocket` are identifiers; `Origin` is RNA
+or protein. `Eigval.1`, `.2`, and `.3` describe atomic spread along the
+largest, intermediate, and smallest pocket axes. The ratios are
+\(rEV21=\lambda_2/\lambda_1\), \(rEV32=\lambda_3/\lambda_2\), and
+\(rEV31=\lambda_3/\lambda_1\); they describe shape proportions.
+`Num_Atoms` counts atoms and describes size. The missing-value output gives
+one count per column; the Origin output gives group counts.
+
+**Answer:** There are `r nrow(d1)` pockets, `r ncol(d1)` columns, 300 RNA and
+300 protein pockets, and no missing values. Identifiers are excluded from PCA.
+
+## Shape-only PCA, without scaling
+
+We use the three ratios to study shape alone. `scale.unit = FALSE` keeps
+their original scales. `quali.sup = 4` makes the fourth column, `Origin`,
+supplementary: it labels groups without determining the axes.
+
+```{r pca-shape}
+# Calculate PCA from the three shape ratios only.
+shape_input <- d1[c(shape_names, "Origin")]
+pca1 <- PCA(shape_input, scale.unit = FALSE, quali.sup = 4, graph = FALSE)
+pca1$eig
+```
+
+**Table columns:** `eigenvalue` is the variance captured by that PC;
+`percentage of variance` is its share of the total; `cumulative percentage`
+adds the shares from PC1 through that row. These PCA eigenvalues describe
+variation across pockets, unlike the geometric eigenvalues in the CSV.
+
+```{r shape-plane, fig.width=6, fig.height=3.5, fig.cap="Shape-only PCA with supplementary Origin."}
+# Plot pockets, colored by Origin; nearby points have similar shape scores.
+plot(pca1, choix = "ind", habillage = 4, label = "none",
+     title = "Shape PCA: Origin")
+```
+
+We check redundancy numerically rather than relying on the PCA alone.
+
+```{r redundancy}
+# Compare ratios and test whether the third is the product of the first two.
+shape_cor <- cor(d1[shape_names])
+shape_cor
+redundancy_error <- max(abs(d1$rEV31 - d1$rEV21 * d1$rEV32))
+redundancy_error
+```
+
+**Correlation table:** Rows and columns identify measurements. Their
+intersection ranges from -1 to +1: positive means increasing together,
+negative means moving oppositely, and near zero means little linear relation.
+The diagonal is 1; the two halves repeat the same comparisons.
+
+**Answer:** PC3 captures only `r round(pca1$eig[3, 2], 2)`%; the first two PCs
+retain `r round(pca1$eig[2, 3], 2)`%. The ratios repeat information because
+\(rEV31=rEV21\times rEV32\), with maximum discrepancy
+`r format(redundancy_error, scientific = TRUE, digits = 3)`, consistent with
+rounding. PC3 is not exactly zero because this relation is multiplicative,
+while PCA captures linear variation. RNA and protein points overlap widely;
+shape does not clearly separate Origins.
+
+## Add size and compare scaling
+
+We compute \(Rg=\sqrt{Eigval1+Eigval2+Eigval3}\), which measures atomic
+spread around the pocket center. We then use the same five measurements in
+two PCAs, changing only scaling to identify its effect.
+
+```{r pca-size}
+# Add Rg and run the five-variable PCA before and after scaling.
+d1$Rg <- sqrt(d1$Eigval.1 + d1$Eigval.2 + d1$Eigval.3)
+five_input <- d1[c(five_names, "Origin")]
+pca_raw <- PCA(five_input, scale.unit = FALSE, quali.sup = 6, graph = FALSE)
+pca2 <- PCA(five_input, scale.unit = TRUE, quali.sup = 6, graph = FALSE)
+
+# Check how much raw variance each measurement contributes.
+raw_variance <- numeric(5)
+names(raw_variance) <- five_names
+for (i in 1:5) {
+  raw_variance[i] <- var(d1[[five_names[i]]])
+}
+data.frame(Variable = five_names, Variance = raw_variance,
+           Percent = 100 * raw_variance / sum(raw_variance))
+
+# Compare the individual PCs' explained-variance percentages.
+data.frame(PC = 1:5, Unscaled_percent = pca_raw$eig[, 2],
+           Scaled_percent = pca2$eig[, 2])
+```
+
+**Table columns:** `Variable` names the measurement; `Variance` gives its
+original spread; `Percent` is its share of total raw variance.
+In the comparison, `PC` identifies the component, and `Unscaled_percent` and
+`Scaled_percent` give its individual share before and after scaling.
+
+```{r shape-size-correlations}
+# Check shape-size relations and interpret the scaled PCA axes.
+cor(d1[five_names])
+pca2$var$cor[, 1:2]
+```
+
+`Dim.1` and `Dim.2` are each measurement's correlations with PC1 and PC2,
+not percentages or PC weights. They explain what the axes represent.
+
+**Answer:** Without scaling, atom-count variance is
+`r round(raw_variance["Num_Atoms"], 1)`, versus about 0.02--0.03 for the ratios.
+It supplies `r round(100 * raw_variance["Num_Atoms"] / sum(raw_variance), 3)`%
+of raw variance; PC1 captures `r round(pca_raw$eig[1, 2], 3)`% and mostly
+describes atom count. This is a numerical-scale artifact.
+
+Scaling gives each variable variance 1. PC1 and PC2 then capture
+`r round(pca2$eig[1, 2], 1)`% and `r round(pca2$eig[2, 2], 1)`%.
+PC1 combines shape and size; PC2 contrasts them. Atom count and `Rg` are
+strongly correlated (`r round(cor(d1$Num_Atoms, d1$Rg), 3)`), while shape-size
+correlations are weaker.
+
+## Session 1 summary
+
+**Same biological information?** No: shape describes proportions; size
+describes atom count and spread. Similar shapes can have different sizes.
+**Role of scaling?** It stops large numerical scales from dominating,
+allowing both shape and size to appear. It does not remove redundancy.
+
+# Session 2 — Hierarchical clustering and linkage
+
+## Reload and compare four dendrograms
+
+Hierarchical clustering repeatedly joins similar groups into a tree.
+We reload the data and calculate Euclidean distances using only the three
+unscaled ratios, keeping size out of this session.
+
+```{r linkage}
+# Reload shape measurements and calculate pairwise distances.
+d2 <- read.csv("data_NS.csv", stringsAsFactors = TRUE)
+x2 <- d2[shape_names]
+dist2 <- dist(x2)
+
+# Change only the linkage rule, keeping the distances identical.
+tree_single <- hclust(dist2, method = "single")
+tree_complete <- hclust(dist2, method = "complete")
+tree_average <- hclust(dist2, method = "average")
+tree_ward <- hclust(dist2, method = "ward.D2")
+```
+
+**Rules:** Single uses the closest pair between groups; complete uses the
+farthest pair; average uses their average distance; Ward minimizes the
+increase in within-group squared dispersion.
+
+```{r dendrograms, fig.width=9, fig.height=5.2, out.width="100%", fig.cap="Four linkage rules on identical shape distances."}
+# Display four trees; hide pocket names to keep them readable.
+par(mfrow = c(2, 2), mar = c(3, 4, 3, 1))
+plot(tree_single, labels = FALSE, main = "Single", xlab = "", sub = "")
+plot(tree_complete, labels = FALSE, main = "Complete", xlab = "", sub = "")
+plot(tree_average, labels = FALSE, main = "Average", xlab = "", sub = "")
+plot(tree_ward, labels = FALSE, main = "Ward", xlab = "", sub = "")
+par(mfrow = c(1, 1))
+```
+
+**Reading:** Leaves are pockets; branches record joins. Height is the
+criterion's joining value, not a pocket measurement. Heights are not directly
+comparable across criteria. Single shows strong chaining; average has a
+dominant branch; complete and Ward are more branched. Ward has clearer main
+branches and large final joins. No partition is chosen from this view alone.
+
+## Cut at k = 4: cluster sizes and ARI
+
+`cutree()` assigns groups; `table()` counts their members. Four groups are
+provisional, as required by the assignment.
+
+```{r linkage-sizes}
+# Cut each tree into four groups and compare their sizes.
+cluster_single <- cutree(tree_single, k = 4)
+cluster_complete <- cutree(tree_complete, k = 4)
+cluster_average <- cutree(tree_average, k = 4)
+cluster_ward <- cutree(tree_ward, k = 4)
+size_table <- cbind(single = table(cluster_single),
+                    complete = table(cluster_complete),
+                    average = table(cluster_average),
+                    ward.D2 = table(cluster_ward))
+size_table
+```
+
+**Table:** Rows are group numbers, columns are methods, entries are pocket
+counts. Each column totals 600. Group numbers need not match across methods.
+Single gives 595/1/1/3; average 496/94/2/8; complete 289/80/214/17;
+Ward 145/219/169/67. Ward avoids tiny outlier groups.
+
+**What is ARI?** The adjusted Rand index asks: do two methods group the same
+pockets together? It compares pairs of pockets. A pair agrees if both methods
+put it together, or both put it apart. It disagrees if only one method puts
+it together. The adjustment accounts for agreement expected by chance,
+given the group sizes.
+
+- **1:** identical grouping, even if the cluster numbers are renamed.
+- **Near 0:** agreement is about what chance would produce, not zero overlap.
+- **Negative:** less agreement than expected by chance.
+
+Higher ARI means more similar memberships. It does not show that groups
+are biologically correct or well separated, and it is not a percentage of
+matching pockets. We use it here to check how much changing linkage changes
+the partition. `comparison$corrected.rand` extracts ARI; the loops compare
+every pair of methods.
+
+```{r linkage-ari}
+# Compare every pair of partitions; extract only the ARI.
+memberships <- list(cluster_single, cluster_complete,
+                    cluster_average, cluster_ward)
+methods <- c("single", "complete", "average", "ward.D2")
+ari_matrix <- matrix(0, 4, 4)
+rownames(ari_matrix) <- methods
+colnames(ari_matrix) <- methods
+for (i in 1:4) {
+  for (j in 1:4) {
+    comparison <- fpc::cluster.stats(dist2, memberships[[i]],
+                                    memberships[[j]], compareonly = TRUE)
+    ari_matrix[i, j] <- comparison$corrected.rand
+  }
+}
+ari_matrix
+```
+
+**Table:** Each entry compares its row and column methods. The diagonal is
+1; the two halves repeat comparisons. Complete versus Ward has ARI
+`r round(ari_matrix["complete", "ward.D2"], 3)`: their grouping agrees only
+partly. Single versus Ward is near zero
+(`r round(ari_matrix["single", "ward.D2"], 3)`), so their agreement is near
+the chance baseline. This confirms that linkage changes membership.
+
+## Session 2 summary
+
+**Which rule and why?** Keep Ward: it avoids chaining and produces more
+reasonably sized, compact groups. This does not validate k = 4; we test
+separation and stability next.
+
+# Session 3 — Choosing k and bootstrap stability
+
+## Rebuild Ward and compare silhouette for k = 2 to 8
+
+We rebuild the same unscaled shape tree. Changing only k lets us compare
+partitions fairly. A **silhouette** measures how much better a pocket fits
+its own group than the nearest alternative group: near +1 is well separated,
+near 0 is a boundary, and negative suggests a better alternative assignment.
+
+```{r silhouettes}
+# Reload and rebuild the same shape clustering.
+d3 <- read.csv("data_NS.csv", stringsAsFactors = TRUE)
+x3 <- d3[shape_names]
+dist3 <- dist(x3)
+tree3 <- hclust(dist3, method = "ward.D2")
+
+# Average the pocket silhouette scores for each candidate k.
+ks <- 2:8
+silhouette_mean <- numeric(length(ks))
+for (i in 1:length(ks)) {
+  groups <- cutree(tree3, k = ks[i])
+  pocket_silhouette <- cluster::silhouette(groups, dist3)
+  silhouette_mean[i] <- mean(pocket_silhouette[, "sil_width"])
+}
+data.frame(k = ks, Average_silhouette = silhouette_mean)
+best_k <- ks[which.max(silhouette_mean)]
+```
+
+**Columns:** `k` is the number of groups; `Average_silhouette` is the average
+score from -1 to +1, not a percentage.
+
+```{r silhouette-scales, fig.width=9, fig.height=3.5, out.width="100%", fig.cap="The same scores on the default and full theoretical scales."}
+# Contrast small score differences with their absolute strength.
+par(mfrow = c(1, 2), mar = c(4, 4, 3, 1))
+plot(ks, silhouette_mean, type = "b", pch = 16,
+     xlab = "k", ylab = "Average silhouette", main = "Default scale")
+plot(ks, silhouette_mean, type = "b", pch = 16, ylim = c(-1, 1),
+     xlab = "k", ylab = "Average silhouette", main = "Full scale [-1, 1]")
+abline(h = 0.25, col = "#D95F02", lty = 2)
+abline(h = 0.5, col = "#33A02C", lty = 2)
+par(mfrow = c(1, 1))
+```
+
+**Optimal k? High score?** k = `r best_k` is best at
+`r round(max(silhouette_mean), 3)`, but separation is weak. The default scale
+highlights small differences; the full scale shows all scores are modest,
+well below 0.5. The reference lines are guides, not significance tests.
+
+## Bootstrap stability: k = 4, then 2 and 3
+
+Bootstrap asks whether groups survive a changed sample. We draw 600 indices
+with replacement, rebuild Ward, and match each original group to the new group
+with maximum **Jaccard overlap**: shared members divided by all distinct members.
+It ranges from 0 (no overlap) to 1 (identical sets).
+
+We compare only sampled identities, counting duplicates once in the overlap
+sets. This avoids penalizing absent pockets. All copies still enter clustering.
+Each group gets its best match; matching is not forced to be one-to-one.
+
+```{r bootstrap-clusters}
+# Run 500 reproducible resamples at each k.
+B <- 500
+set.seed(22518830)
+stability <- list()
+stability_table <- data.frame()
+for (k in c(4, 2, 3)) {
+  original <- cutree(tree3, k = k)
+  scores <- matrix(NA_real_, B, k)
+  for (b in 1:B) {
+    # Resample and rebuild groups in the same shape space.
+    ids <- sample(1:nrow(x3), nrow(x3), replace = TRUE)
+    bootstrap_tree <- hclust(dist(x3[ids, ]), method = "ward.D2")
+    bootstrap_groups <- cutree(bootstrap_tree, k = k)
+    present <- unique(ids)
+    for (g in 1:k) {
+      reference <- intersect(which(original == g), present)
+      if (length(reference) == 0) next
+      matches <- numeric(k)
+      for (h in 1:k) {
+        # Calculate overlap with each candidate group.
+        candidate <- unique(ids[bootstrap_groups == h])
+        shared <- length(intersect(reference, candidate))
+        total <- length(union(reference, candidate))
+        matches[h] <- shared / total
+      }
+      scores[b, g] <- max(matches)
+    }
+  }
+  # Average each group's best overlap across resamples.
+  mean_jaccard <- colMeans(scores, na.rm = TRUE)
+  stability[[as.character(k)]] <- mean_jaccard
+  stability_table <- rbind(stability_table,
+    data.frame(k = k, Cluster = 1:k, Mean_Jaccard = mean_jaccard))
+}
+stability_table
+aggregate(Mean_Jaccard ~ k, data = stability_table, FUN = mean)
+```
+
+**Columns:** `k` identifies the partition; `Cluster` is its original group;
+`Mean_Jaccard` is its mean best overlap over 500 resamples. The final table
+averages across groups, weighting each group equally. Missing comparisons
+are omitted if a group has no sampled member.
+
+**Answer:** k = 4 scores range from `r round(min(stability[["4"]]), 3)` to
+`r round(max(stability[["4"]]), 3)`, showing instability. k = 2 gives
+`r paste(round(stability[["2"]], 3), collapse = " and ")`, better but limited.
+k = 3 gives `r paste(round(stability[["3"]], 3), collapse = ", ")`.
+None reaches the usual 0.75 mean-Jaccard stability guideline. We retain four
+groups in session 4 only for the requested comparison.
+
+## Session 3 summary
+
+**Same question?** No. Silhouette measures observed separation; bootstrap
+measures reproducibility under resampling. Both favor k = 2 here, but neither
+strongly supports clearly separated natural groups.
+
+# Session 4 — Clustering, PCA, and heatmap
+
+## Repeat shape clustering and add scaled shape-plus-size clustering
+
+We compare the same pockets at k = 4. The first tree exactly repeats the
+previous unscaled ratios; the second adds size and therefore requires scaling.
+
+```{r two-clusterings}
+# Reload, recompute Rg, and prepare the two measurement spaces.
+d4 <- read.csv("data_NS.csv", stringsAsFactors = TRUE)
+d4$Rg <- sqrt(d4$Eigval.1 + d4$Eigval.2 + d4$Eigval.3)
+x4 <- d4[shape_names]
+z4 <- scale(d4[five_names])
+dist_shape <- dist(x4)
+dist_five <- dist(z4)
+
+# Build both Ward partitions and check the repeated one is unchanged.
+tree_shape <- hclust(dist_shape, method = "ward.D2")
+tree_five <- hclust(dist_five, method = "ward.D2")
+cluster_shape <- cutree(tree_shape, k = 4)
+cluster_five <- cutree(tree_five, k = 4)
+identical(cluster_shape, cutree(tree3, k = 4))
+cor(d4$Num_Atoms, d4$Rg)
+```
+
+**Size weighting:** Atom count and `Rg` correlate at about 0.83, partly
+repeating size information. Including both gives size more weight than using
+one descriptor. Scaling equalizes variances, not independent biological
+features; the shape ratios also contain redundancy.
+
+## Rebuild PCA1 and PCA2; show Origin and both clusterings
+
+PCA summarizes the measurement spaces; cluster colors describe their groups.
+Origin remains supplementary in both PCAs.
+
+```{r rebuild-pcas}
+# Repeat the PCAs from session 1 without using group labels to define axes.
+pca1_4 <- PCA(d4[c(shape_names, "Origin")], scale.unit = FALSE,
+              quali.sup = 4, graph = FALSE)
+pca2_4 <- PCA(d4[c(five_names, "Origin")], scale.unit = TRUE,
+              quali.sup = 6, graph = FALSE)
+```
+
+```{r origin-pca2, fig.width=6, fig.height=3.5, fig.cap="Supplementary Origin on the scaled shape-plus-size PCA."}
+# Show known Origins on the shape-plus-size scores.
+plot(pca2_4, choix = "ind", habillage = 6, label = "none",
+     title = "Shape + size PCA: Origin")
+```
+
+**Origin:** RNA and proteins still overlap, but show a shift along size-related
+variation. RNA pockets have more atoms and larger mean `Rg`.
+
+We now keep the same pure-shape coordinates and change only the colors.
+This tests whether the size-influenced groups are visible using shape alone.
+
+```{r clusters-on-shape, fig.width=9, fig.height=3.5, out.width="100%", fig.cap="Identical shape coordinates colored by the five-variable and shape-only groups."}
+# Use the same shape-only scores in both panels.
+pc1 <- pca1_4$ind$coord[, 1]
+pc2 <- pca1_4$ind$coord[, 2]
+par(mfrow = c(1, 2), mar = c(4, 4, 3, 1))
+plot(pc1, pc2, col = cluster_colors[cluster_five], pch = 16, cex = 0.5,
+     xlab = "PC1 (59.74%)", ylab = "PC2 (39.52%)",
+     main = "Five-variable groups")
+legend("topright", legend = 1:4, col = cluster_colors, pch = 16, bty = "n")
+plot(pc1, pc2, col = cluster_colors[cluster_shape], pch = 16, cex = 0.5,
+     xlab = "PC1 (59.74%)", ylab = "PC2 (39.52%)",
+     main = "Shape-only groups")
+legend("topright", legend = 1:4, col = cluster_colors, pch = 16, bty = "n")
+par(mfrow = c(1, 1))
+```
+
+**Visible size trace?** Partly: five-variable groups show some shape differences
+but overlap more. Their very large-pocket group does not form a distinct shape
+region. Shape-only colors form clearer regions because those groups were
+built from shape. Shape cannot fully recover the organization added by size.
+
+## Heatmap and numerical comparison
+
+Rows are pockets; columns are the five measurements. Values are standardized:
+0 is the mean, +1 is one SD above, and -1 one SD below. Blue means lower,
+white near average, and red higher. The five-variable Ward tree orders rows;
+side bars identify Origin and both group assignments.
+
+```{r heatmap, fig.width=8, fig.height=5.2, out.width="100%", fig.cap="Standardized measurements ordered by the five-variable Ward tree."}
+# Match the measurements and category annotations by pocket row.
+annotation <- data.frame(Origin = d4$Origin,
+                         Cluster_five = factor(cluster_five),
+                         Cluster_shape = factor(cluster_shape))
+rownames(z4) <- paste0("Pocket_", 1:nrow(d4))
+rownames(annotation) <- rownames(z4)
+annotation_colors <- list(
+  Origin = origin_colors,
+  Cluster_five = setNames(cluster_colors, 1:4),
+  Cluster_shape = setNames(cluster_colors, 1:4))
+
+# Reuse the five-variable tree and retain the stated column order.
+pheatmap(z4, cluster_rows = tree_five, cluster_cols = FALSE,
+         annotation_row = annotation, annotation_colors = annotation_colors,
+         show_rownames = FALSE, border_color = NA,
+         color = hcl.colors(100, "Blue-Red 3"), fontsize = 9)
+```
+
+**Do blocks line up?** Five-variable groups form contiguous blocks because
+their own tree orders the rows. Shape-only groups are more mixed; Origin is
+also mixed. Matching colors across the two group bars do not automatically
+mean matching groups.
+
+```{r clustering-agreement}
+# Count shared members: shape groups in rows, five-variable groups in columns.
+cross_table <- table(Shape = cluster_shape, Five = cluster_five)
+cross_table
+
+# Convert shared counts into Jaccard overlaps for every group pair.
+jaccard_matrix <- matrix(0, 4, 4)
+rownames(jaccard_matrix) <- paste("Shape", 1:4)
+colnames(jaccard_matrix) <- paste("Five", 1:4)
+for (i in 1:4) {
+  for (j in 1:4) {
+    shared <- cross_table[i, j]
+    total <- sum(cross_table[i, ]) + sum(cross_table[, j]) - shared
+    jaccard_matrix[i, j] <- shared / total
+  }
+}
+jaccard_matrix
+
+# Find the best match for each shape group.
+best_matches <- data.frame(Shape_cluster = 1:4,
+                          Best_five_cluster = integer(4),
+                          Best_Jaccard = numeric(4))
+for (i in 1:4) {
+  best_matches$Best_five_cluster[i] <- which.max(jaccard_matrix[i, ])
+  best_matches$Best_Jaccard[i] <- max(jaccard_matrix[i, ])
+}
+best_matches
+
+# Compare the complete partitions using ARI.
+comparison <- fpc::cluster.stats(dist_shape, cluster_shape, cluster_five,
+                                 compareonly = TRUE)
+agreement <- comparison$corrected.rand
+agreement
+```
+
+**Tables:** The contingency entries count shared pockets. Jaccard entries
+give shared membership divided by combined distinct membership, between 0
+and 1. `Shape_cluster` identifies the old group, `Best_five_cluster` its
+highest-overlap new group, and `Best_Jaccard` that overlap. Numbers are
+arbitrary, so the contingency diagonal has no special meaning.
+
+**Numerical answer:** Best overlaps are
+`r paste(round(best_matches$Best_Jaccard, 3), collapse = ", ")`;
+ARI is `r round(agreement, 3)`. Agreement is partial: adding size changes
+membership, not just group names.
+
+## Final summary connecting the sessions
+
+Session 1 separated shape from size and demonstrated why scaling matters.
+Session 2 showed that linkage changes memberships, with Ward avoiding strong
+chaining. Session 3 found weak separation and limited reproducibility of four
+shape groups. Session 4 showed that standardized size adds a different grouping
+signal. Together, the results support overlapping shape variation plus size
+variation, rather than four firmly established natural shape groups or two
+completely separate Origins.
+
+# Going further — Personal reflection
+
+## Archetype rule and comparison with both clusterings
+
+**Limitation:** The complete CSV and detailed QMD named in `document.pdf`
+are absent. If the CSV is unavailable, we reconstruct the article's rule;
+these are not independently supplied labels. Archetypes are median-threshold
+categories, not Ward results: high/high ratios give sphere-like, high/low
+disk-like, low/high rod-like, and low/low strongly anisotropic shapes.
+
+```{r archetype-rule}
+# Estimate pooled thresholds and assign all four ratio combinations.
+median21 <- median(d4$rEV21)
+median32 <- median(d4$rEV32)
+data.frame(Variable = c("rEV21", "rEV32"),
+           Median_threshold = c(median21, median32))
+high21 <- d4$rEV21 >= median21
+high32 <- d4$rEV32 >= median32
+rule_archetype <- rep("Strongly anisotropic", nrow(d4))
+rule_archetype[high21 & high32] <- "Sphere-like"
+rule_archetype[high21 & !high32] <- "Disk-like"
+rule_archetype[!high21 & high32] <- "Rod-like"
+
+# Load supplied labels if available, matching pocket identities first.
+archetype <- rule_archetype
+label_source <- "Reconstructed median-rule labels"
+complete_path <- "../data/2026-09-09_data_PROT_RNA_TP_seance4_complet.csv"
+if (file.exists(complete_path)) {
+  complete <- read.csv(complete_path)
+  key <- paste(d4$PDB_ID, d4$Pocket)
+  complete_key <- paste(complete$PDB_ID, complete$Pocket)
+  index <- match(key, complete_key)
+  stopifnot("Archetype" %in% names(complete), !anyNA(index),
+            !anyDuplicated(complete_key), !anyNA(complete$Archetype[index]))
+  archetype <- complete$Archetype[index]
+  label_source <- "Archetype labels loaded from the complete file"
+}
+label_source
+```
+
+`Variable` names each ratio; `Median_threshold` gives its dividing value.
+High means at least the median. Identity matching avoids comparing unrelated
+rows if the complete file has a different order.
+
+```{r archetype-agreement}
+# Compare each clustering with the rule; integer labels preserve membership.
+archetype_labels <- as.integer(factor(archetype))
+shape_comparison <- fpc::cluster.stats(dist_shape, cluster_shape,
+                                      archetype_labels, compareonly = TRUE)
+five_comparison <- fpc::cluster.stats(dist_shape, cluster_five,
+                                     archetype_labels, compareonly = TRUE)
+shape_archetype_ari <- shape_comparison$corrected.rand
+five_archetype_ari <- five_comparison$corrected.rand
+data.frame(Clustering = c("Three ratios", "Five variables"),
+           ARI_with_Archetype = c(shape_archetype_ari, five_archetype_ari))
+```
+
+`Clustering` identifies the analysis; `ARI_with_Archetype` measures its agreement
+with the categories. Shape-only ARI is `r round(shape_archetype_ari, 3)` versus
+`r round(five_archetype_ari, 3)` with size. Neither reproduces the rule exactly;
+shape-only agrees more because the rule excludes size.
+
+## Frequencies and shape-versus-size effect sizes
+
+```{r frequencies-effects}
+# Compare category counts and percentages within each Origin.
+frequency <- table(Archetype = archetype, Origin = d4$Origin)
+frequency
+100 * prop.table(frequency, margin = 2)
+
+# Express each RNA-minus-protein mean difference in pooled SD units.
+effect_table <- data.frame(Variable = five_names, RNA_mean = numeric(5),
+                          PROT_mean = numeric(5), Cohen_d = numeric(5))
+for (i in 1:5) {
+  rna_values <- d4[d4$Origin == "RNA", five_names[i]]
+  protein_values <- d4[d4$Origin == "PROT", five_names[i]]
+  pooled_sd <- sqrt((var(rna_values) + var(protein_values)) / 2)
+  effect_table$RNA_mean[i] <- mean(rna_values)
+  effect_table$PROT_mean[i] <- mean(protein_values)
+  effect_table$Cohen_d[i] <-
+    (mean(rna_values) - mean(protein_values)) / pooled_sd
+}
+effect_table
+```
+
+**Tables:** Frequency rows are categories; columns are Origins. Percentages
+divide each column by 300. `Variable` names a measurement; `RNA_mean` and
+`PROT_mean` are original-unit averages; `Cohen_d` is their standardized
+difference. Positive d means higher in RNA. Equal group sizes allow the
+simple pooled-SD formula above.
+
+**Article comparison:** Counts reproduce Table 3: sphere-like 49 RNA/86
+protein, disk-like 91/74, strongly anisotropic 75/60, rod-like 85/80.
+Globally, disk-like and rod-like each account for 27.5%, the others 22.5%.
+Proteins have more sphere-like pockets; RNA has more disk-like and strongly
+anisotropic pockets; rod-like frequencies are similar.
+
+The d values reproduce Table 1: shape -0.165/-0.289/-0.372, atom count +0.894,
+and `Rg` +0.412. Shape shifts are smaller than the atom-count difference.
+RNA pockets are larger on average, while the shape landscape remains shared.
+
+## Bootstrap stability of the median rule
+
+Following the article, we resample 300 protein and 300 RNA pockets separately
+1,000 times. Each time we recompute thresholds, classify **all original
+pockets**, and record ARI and the fraction changing category.
+
+```{r threshold-bootstrap}
+# Prepare reproducible Origin-stratified samples and result vectors.
+protein_ids <- which(d4$Origin == "PROT")
+rna_ids <- which(d4$Origin == "RNA")
+original_rule_labels <- as.integer(factor(rule_archetype))
+B_rule <- 1000
+set.seed(20260910)
+rule_ari <- numeric(B_rule)
+reclassified <- numeric(B_rule)
+for (b in 1:B_rule) {
+  # Estimate pooled medians from the resampled pockets.
+  sampled_protein <- sample(protein_ids, length(protein_ids), replace = TRUE)
+  sampled_rna <- sample(rna_ids, length(rna_ids), replace = TRUE)
+  ids <- c(sampled_protein, sampled_rna)
+  new_median21 <- median(d4$rEV21[ids])
+  new_median32 <- median(d4$rEV32[ids])
+
+  # Apply new boundaries to all 600 original pockets.
+  high21 <- d4$rEV21 >= new_median21
+  high32 <- d4$rEV32 >= new_median32
+  new_labels <- rep("Strongly anisotropic", nrow(d4))
+  new_labels[high21 & high32] <- "Sphere-like"
+  new_labels[high21 & !high32] <- "Disk-like"
+  new_labels[!high21 & high32] <- "Rod-like"
+  comparison <- fpc::cluster.stats(dist_shape, original_rule_labels,
+    as.integer(factor(new_labels)), compareonly = TRUE)
+  rule_ari[b] <- comparison$corrected.rand
+  reclassified[b] <- mean(new_labels != rule_archetype)
+}
+
+# Summarize agreement and percentage changing category.
+bootstrap_summary <- rbind(
+  ARI = quantile(rule_ari, c(0.025, 0.5, 0.975)),
+  Reclassified_percent = 100 * quantile(reclassified, c(0.025, 0.5, 0.975)))
+bootstrap_summary
+```
+
+**Columns:** `2.5%`--`97.5%` give the central 95% range; `50%` is the median.
+Rows measure ARI agreement and percentage reclassified.
+
+**Answer:** Median ARI is `r round(median(rule_ari), 3)`
+[`r round(quantile(rule_ari, 0.025), 3)`, `r round(quantile(rule_ari, 0.975), 3)`];
+`r round(100 * median(reclassified), 1)`% change category, close to the article's
+0.92 [0.82, 0.98] and 3%. Stable medians give reproducible categories;
+Ward groups were less stable. Their sampled-group Jaccard and the rule's
+all-pocket ARI are different statistics. Stable thresholds do not prove
+naturally separated groups.
+
+**Source:** [Ziani et al. (2026)](https://doi.org/10.34133/csbj.0022), supplied
+`article.pdf`, Tables 1 and 3 and bootstrap methods.

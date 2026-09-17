@@ -1,0 +1,6 @@
+"0","d2 <- load_data()"
+"0","x2 <- d2[shape_names]"
+"0","dist2 <- dist(x2)"
+"0","methods <- c(""single"", ""complete"", ""average"", ""ward.D2"")"
+"0","trees <- lapply(methods, function(m) hclust(dist2, method = m))"
+"0","names(trees) <- methods"
