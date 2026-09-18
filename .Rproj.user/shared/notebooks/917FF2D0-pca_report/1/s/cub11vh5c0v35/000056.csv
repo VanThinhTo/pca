@@ -1,0 +1,3 @@
+"0",""
+"0","sil_res <- silhouette(x=cut_ward, dist = distx5w)"
+"0","plot(sil_res, col = c(""red"", ""blue""), border = NA) #, ""green"", ""orange"""

@@ -1,0 +1,1 @@
+"0","plot(pca$ind$coord[,1], pca$ind$coord[,2], col = cut_ward, pch=20)"

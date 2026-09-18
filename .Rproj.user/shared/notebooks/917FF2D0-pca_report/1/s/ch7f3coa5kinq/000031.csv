@@ -1,0 +1,3 @@
+"0",""
+"0","sil_res <- silhouette(x=cut_avg, dist = distx3wo)"
+"0","plot(sil_res, col = c(""red"", ""blue"",""green""), border = NA) #, ""green"", ""orange"""

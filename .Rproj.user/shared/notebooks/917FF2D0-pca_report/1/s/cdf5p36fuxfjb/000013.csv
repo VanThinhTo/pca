@@ -1,0 +1,7 @@
+"0","# Add Rg and run the five-variable PCA before and after scaling."
+"0","d1$Rg <- sqrt(d1$Eigval.1 + d1$Eigval.2 + d1$Eigval.3)"
+"0","five_input <- d1[c(five_names, ""Origin"")]"
+"0",""
+"0","#without scale"
+"0","pca3 <- PCA(five_input, scale.unit = FALSE, quali.sup = 6, graph = FALSE)"
+"0","plot(pca3, choix = ""var"")"

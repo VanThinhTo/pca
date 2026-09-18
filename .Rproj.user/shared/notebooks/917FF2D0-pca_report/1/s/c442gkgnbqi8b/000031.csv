@@ -1,0 +1,13 @@
+"0","cut_ward <- cutree(tree=tree_ward, k=2)"
+"0","table(cut_ward)"
+"1","cut_ward
+"
+"1","  1 "
+"1","  2 "
+"1","
+"
+"1","279 "
+"1","321 "
+"1","
+"
+"0","plot(tree_ward, hang = -1, labels = FALSE)"

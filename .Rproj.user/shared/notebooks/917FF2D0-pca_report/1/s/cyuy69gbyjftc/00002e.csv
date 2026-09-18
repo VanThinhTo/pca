@@ -1,0 +1,4 @@
+"0","#scale"
+"0","shape_input <- d1[c(shape_names, ""Origin"")]"
+"0","pca2 <- PCA(shape_input, scale.unit = TRUE, quali.sup = 4, graph = FALSE)"
+"0","plot(pca2, choix = ""var"")"

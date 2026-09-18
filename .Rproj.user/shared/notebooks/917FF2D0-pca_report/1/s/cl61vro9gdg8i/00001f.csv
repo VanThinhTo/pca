@@ -1,0 +1,3 @@
+"0","#with scale"
+"0","pca4 <- PCA(five_input, scale.unit = TRUE, quali.sup = 6, graph = FALSE)"
+"0","plot(pca4, choix = ""var"")"

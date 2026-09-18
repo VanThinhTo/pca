@@ -1,0 +1,13 @@
+"0","cut_ward <- cutree(avg_tree, k=2)"
+"0","table(cut_ward)"
+"1","cut_ward
+"
+"1","  1 "
+"1","  2 "
+"1","
+"
+"1","598 "
+"1","  2 "
+"1","
+"
+"0","plot(avg_tree, hang=-1, label=FALSE)"

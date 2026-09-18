@@ -1,0 +1,16 @@
+"0","#build the data"
+"0","X3wo <- shape_input[shape_names]"
+"0","#calculate the distance"
+"0","distx3wo <- dist(X3wo) #weighted Euclidean"
+"0","#build the dendrogram"
+"0","avg_tree <- hclust(distx3wo, method = ""ward.D2"")"
+"0",""
+"0","#Find the best cluster by NbClust"
+"0","library(NbClust)"
+"0","Nb_res <-  NbClust(X3wo, method=""ward.D2"")"
+"1","*** : The Hubert index is a graphical method of determining the number of clusters.
+                In the plot of Hubert index, we seek a significant knee that corresponds to a 
+                significant increase of the value of the measure i.e the significant peak in Hubert
+                index second differences plot. 
+ 
+"

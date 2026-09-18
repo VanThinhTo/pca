@@ -1,0 +1,2 @@
+"0","sil_ward <- silhouette(x=cut_ward, dist = dist5)"
+"0","plot(sil_ward, col = c(""red"", ""blue"", ""green"", ""orange""), border=NA)"

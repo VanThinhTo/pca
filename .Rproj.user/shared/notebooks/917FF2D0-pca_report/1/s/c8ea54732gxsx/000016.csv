@@ -1,0 +1,4 @@
+"0","data <- read.csv(""data_NS.csv"")"
+"0","df <- data[,c(2,7:10)]"
+"0","df$Rg <- sqrt(data$Eigval.1+data$Eigval.2+data$Eigval.3)"
+"0","df"

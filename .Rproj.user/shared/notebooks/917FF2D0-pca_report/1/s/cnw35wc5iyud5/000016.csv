@@ -1,0 +1,2 @@
+"0","pca <- PCA(df, scale.unit = TRUE, quali.sup = 1, graph=FALSE)"
+"0","plot(pca, choix = ""var"")"

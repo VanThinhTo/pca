@@ -1,0 +1,15 @@
+"0","# Reload shape measurements and calculate pairwise distances."
+"0","set.seed(42)"
+"0","five_input <- d1[c(five_names, ""Origin"")]"
+"0","x5 <- five_input[,4:5]"
+"0","# x5 <- scale(x5)"
+"0","dist5 <- dist(x5)"
+"0","tree_ward_5 <- hclust(dist5, method = ""average"")"
+"0","library(NbClust)"
+"0","nb_k_ward <- NbClust(x5, method=""average"")"
+"1","*** : The Hubert index is a graphical method of determining the number of clusters.
+                In the plot of Hubert index, we seek a significant knee that corresponds to a 
+                significant increase of the value of the measure i.e the significant peak in Hubert
+                index second differences plot. 
+ 
+"

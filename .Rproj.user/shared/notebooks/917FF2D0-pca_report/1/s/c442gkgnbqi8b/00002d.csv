@@ -1,0 +1,13 @@
+"0","X <- df[,-1]"
+"0","X <- scale(X)"
+"0","distX <- dist(X)"
+"0","tree_ward <- hclust(d=distX, method=""ward.D2"")"
+"0",""
+"0","library(NbClust)"
+"0","Nb_res <- NbClust(data=X, method = ""ward.D2"")"
+"1","*** : The Hubert index is a graphical method of determining the number of clusters.
+                In the plot of Hubert index, we seek a significant knee that corresponds to a 
+                significant increase of the value of the measure i.e the significant peak in Hubert
+                index second differences plot. 
+ 
+"

@@ -212,6 +212,20 @@ tree_average <- hclust(dist2, method = "average")
 tree_ward <- hclust(dist2, method = "ward.D2")
 ```
 
+```{r}
+library(NbClust)
+nb_k_ward <- NbClust(x2, method="ward.D2")
+nb_k_complete <- NbClust(x2, method="complete")
+
+cut_ward <- cutree(tree_ward, k=3)
+table(cut_ward)
+```
+
+```{r}
+
+```
+
+
 **Rules:** Single uses the closest pair between groups; complete uses the
 farthest pair; average uses their average distance; Ward minimizes the
 increase in within-group squared dispersion.
